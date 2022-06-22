@@ -1,16 +1,12 @@
 """Module for finding blobs in deformation maps
 """
-import os
 import numpy as np
 
-from . import plot
 from . import utils as blob_utils
 from .logger import get_log
 
 logger = get_log()
 BLOB_KWARG_DEFAULTS = {"threshold": 1, "min_sigma": 3, "max_sigma": 40}
-
-# __all__ = ["BLOB_KWARG_DEFAULTS", "find_blobs"]
 
 
 # TODO: clean up redundancies in this function
@@ -172,97 +168,3 @@ def find_blobs(
             logger.info(f"Found {len(blobs_with_mags)} negative blobs")
 
     return blobs, sigma_list
-
-
-def _make_blobs(image, extra_args, positive=True, negative=True, verbose=False):
-    blob_kwargs = BLOB_KWARG_DEFAULTS.copy()
-    blob_kwargs.update(extra_args)
-    logger.info("Using the following blob function settings:")
-    logger.info(blob_kwargs)
-
-    logger.info("Finding blobs: positive %s, negative %s" % (positive, negative))
-    blobs, _ = find_blobs(image, positive=positive, negative=negative, **blob_kwargs)
-
-    logger.info("Blobs found:")
-    if verbose:
-        logger.info(blobs)
-    return blobs
-
-
-def make_blob_image(
-    igram_path=".",
-    filename="deformation.h5",
-    dset=None,
-    load=True,
-    positive=True,
-    negative=True,
-    title_prefix="",
-    blob_filename="blobs.npy",
-    row_start=0,
-    row_end=None,
-    col_start=0,
-    col_end=None,
-    verbose=False,
-    masking=True,
-    blobfunc_args=(),
-):
-    """Find and view blobs in deformation"""
-    from apertools import plotting, latlon, sario
-
-    ext = os.path.splitext(filename)[1]
-    if not filename or ext in (".h5", ".npy"):
-        logger.info("Searching %s for igram_path" % igram_path)
-        image = latlon.load_deformation_img(
-            igram_path, n=1, filename=filename, dset=dset
-        )
-        # Note: now we use image.dem_rsc after cropping to keep track of new latlon bounds
-    else:
-        image = latlon.LatlonImage(
-            data=np.angle(sario.load(filename)), dem_rsc_file="dem.rsc"
-        )
-
-    if masking is True and ext == ".h5":
-        stack_mask = sario.load_mask(
-            directory=igram_path, deformation_filename=filename, dset=dset
-        )
-        logger.info("Masking image")
-        image[stack_mask] = np.nan
-
-    image = image[row_start:row_end, col_start:col_end]
-
-    # TODO: fix this part for h5
-    # try:
-    #     geolist = np.load(os.path.join(igram_path, 'geolist.npy'), encoding='bytes')
-    #     title = "%s Deformation from %s to %s" % (title_prefix, geolist[0], geolist[-1])
-    # except FileNotFoundError:
-    #     logger.warning("No geolist found in %s" % igram_path)
-    #     title = "%s Deformation" % title_prefix
-
-    imagefig, axes_image = plotting.plot_image_shifted(
-        image,
-        img_data=image.dem_rsc,
-        title=filename,
-        xlabel="Longitude",
-        ylabel="Latitude",
-    )
-    # Or without lat/lon data:
-    # imagefig, axes_image = plotting.plot_image_shifted(image, title=title)
-
-    if load and os.path.exists(blob_filename):
-        logger.info("Loading %s" % blob_filename)
-        blobs = np.load(blob_filename)
-    else:
-        blobs = _make_blobs(image, blobfunc_args, positive=positive, negative=negative)
-        logger.info("Saving %s" % blob_filename)
-        # TODO: fix this for h5
-        np.save(blob_filename, blobs)
-
-    blobs_ll = blob_utils.blobs_to_latlon(blobs, image.dem_rsc)
-    if verbose:
-        for lat, lon, r, val in blobs_ll:
-            logger.info(
-                "({0:.4f}, {1:.4f}): radius: {2}, val: {3}".format(lat, lon, r, val)
-            )
-
-    plot.plot_blobs(blobs=blobs_ll, ax=imagefig.gca())
-    # plot_blobs(blobs=blobs, ax=imagefig.gca())

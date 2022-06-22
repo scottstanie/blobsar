@@ -1,9 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from mpl_toolkits.mplot3d import Axes3D
-from scipy.spatial.qhull import ConvexHull
-from sklearn import manifold
 from apertools import plotting
 from . import utils as blob_utils
 from . import pvalue
@@ -20,7 +17,6 @@ def plot_blobs(
     color="blue",
     blob_cmap=None,
     plot_img=False,
-    delete=False,
     extent=None,
     bbox=None,
     alpha=0.8,
@@ -71,85 +67,8 @@ def plot_blobs(
         ax.add_patch(c)
         patches.append(c)
 
-    remaining_blobs = blobs
     # plt.draw()
-    if delete is False:
-        # print("ok")
-        # plt.show()
-        return blobs, ax
-
-    ax.blobs = sorted_blobs
-    ax.picked_idx = None
-    ax.picked_object = None
-    ax.deleted_idxs = set()
-
-    pick_handler = on_pick(sorted_blobs, patches)
-    cid_pick = fig.canvas.mpl_connect("pick_event", pick_handler)
-    cid_press = fig.canvas.mpl_connect("button_press_event", on_press)
-    cid_key = fig.canvas.mpl_connect("key_press_event", on_key)
-
-    plt.show()
-
-    if ax.deleted_idxs:
-        print("Deleted %s blobs" % len(ax.deleted_idxs))
-        all_idx = range(len(blobs))
-        remaining = list(set(all_idx) - set(ax.deleted_idxs))
-        remaining_blobs = np.array(sorted_blobs)[remaining]
-    else:
-        remaining_blobs = blobs
-
-    fig.canvas.mpl_disconnect(cid_pick)
-    fig.canvas.mpl_disconnect(cid_press)
-    fig.canvas.mpl_disconnect(cid_key)
-
-    return remaining_blobs, ax
-
-
-def on_pick(blobs, patches):
-    def pick_event(event):
-        """Store the index matching the clicked blob to delete"""
-        ax = event.artist.axes
-        for i, artist in enumerate(patches):
-            if event.artist == artist:
-                ax.picked_idx = i
-                ax.picked_object = artist  # Also save circle Artist to remove
-
-        print("Selected blob: %s" % str(blobs[ax.picked_idx]))
-
-    return pick_event
-
-
-def on_press(event):
-    "on button press we will see if the mouse is over us and store some data"
-    # print("on press event", event)
-    # You can either double click or right click to unselect
-    if event.button != 3 and not event.dblclick:
-        return
-
-    ax = event.inaxes
-    if ax:
-        print("Unselecting blob")
-        ax.picked_idx = None
-        ax.picked_object = None
-
-
-def on_key(event):
-    """
-    Function to be bound to the key press event
-    If the key pressed is delete and there is a picked object,
-    remove that object from the canvas
-    """
-    if event.key == "delete":
-        ax = event.inaxes
-        if ax is not None and ax.picked_object:
-            cur_blob = ax.blobs[ax.picked_idx]
-            print("Deleting blob %s" % str(cur_blob))
-            ax.deleted_idxs.add(ax.picked_idx)
-            ax.picked_idx = None
-
-            ax.picked_object.remove()
-            ax.picked_object = None
-            ax.figure.canvas.draw()
+    return blobs, ax
 
 
 def plot_cropped_blob(image=None, blob=None, patch=None, crop_val=None, sigma=0):
@@ -175,9 +94,9 @@ def plot_cropped_blob(image=None, blob=None, patch=None, crop_val=None, sigma=0)
     return ax
 
 
-# TODO: export this? seems useful
 def plot_surface(heights_grid, ax=None):
     """Makes default X, Y meshgrid to plot a surface of heights"""
+    from mpl_toolkits.mplot3d import Axes3D
     rows, cols = heights_grid.shape
     xx = np.linspace(1, cols + 1, cols)
     yy = np.linspace(1, rows + 1, rows)
@@ -191,123 +110,6 @@ def plot_surface(heights_grid, ax=None):
     axim = ax2.imshow(heights_grid)
     fig.colorbar(axim, ax=ax2)
     return ax
-
-
-def scatter_blobs(blobs, image=None, axes=None, color="b", label=None):
-    if axes is None:
-        fig, axes = plt.subplots(1, 3)
-    else:
-        fig = axes[0].get_figure()
-
-    if blobs.shape[1] < 6:
-        blobs = blob_utils.append_stats(blobs, image)
-
-    print("Taking abs value of blobs")
-    blobs = np.abs(blobs)
-
-    # Size vs amplitude
-    sizes = blobs[:, 2]
-    mags = blobs[:, 3]
-    vars_ = blobs[:, 4]
-    ptps = blobs[:, 5]
-
-    axes[0].scatter(sizes, mags, c=color, label=label)
-    axes[0].set_xlabel("Size")
-    axes[0].set_ylabel("Magnitude")
-    if label:
-        axes[0].legend()
-
-    axes[1].scatter(sizes, vars_, c=color, label=label)
-    axes[1].set_xlabel("Size")
-    axes[1].set_ylabel("variance")
-
-    axes[2].scatter(sizes, ptps, c=color, label=label)
-    axes[2].set_xlabel("Size")
-    axes[2].set_ylabel("peak-to-peak")
-    return fig, axes
-
-
-def scatter_blobs_3d(blobs, image=None, ax=None, color="b", label=None, blob_img=None):
-    if ax is None:
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1, projection="3d")
-    else:
-        fig = ax.get_figure()
-
-    if blobs.shape[1] < 6:
-        blobs = blob_utils.append_stats(blobs, image)
-
-    if blob_img is not None:
-        # Length of radii in km
-        sizes = blob_img.pixel_to_km(blobs[:, 2])
-    else:
-        sizes = blobs[:, 2]
-    mags = blobs[:, 3]
-    vars_ = blobs[:, 4]
-    ax.scatter(sizes, mags, vars_, c=color, label=label)
-    ax.set_title("Size, mag, var of blobs")
-    ax.set_xlabel("size")
-    ax.set_ylabel("magniture")
-    ax.set_zlabel("variance")
-    return fig, ax
-
-
-def plot_hull(regions=None, hull=None, ax=None, linecolor="k-"):
-    if ax is None:
-        fig, ax = plt.subplots(1, 1)
-    if hull is None:
-        hull = ConvexHull(regions)
-    for simplex in hull.simplices:
-        ax.plot(hull.points[simplex, 0], hull.points[simplex, 1], linecolor)
-
-
-def plot_bbox(bbox, ax=None, linecolor="k-", cv_format=False):
-    for c in blob_utils.bbox_to_coords(bbox, cv_format=cv_format):
-        print(c)
-        ax.plot(c[0], c[1], "rx", markersize=6)
-
-
-def plot_regions(regions, ax=None, linecolor="k-"):
-    for shape in blob_utils.regions_to_shapes(regions):
-        xx, yy = shape.convex_hull.exterior.xy
-        ax.plot(xx, yy, linecolor)
-
-
-def plot_tsne(X, y_idxs=None, n_components=2, perplexities=(5,), colors=("r", "g")):
-    fig, axes = plt.subplots(1, len(perplexities))
-    Y_list = []
-    for pidx, p in enumerate(perplexities):
-        tsne = manifold.TSNE(n_components=n_components, perplexity=p, init="random")
-        Y = tsne.fit_transform(X)
-        Y_list.append(Y)
-
-        ax = axes.ravel()[pidx]
-        if y_idxs is not None:
-            for j, idxs in enumerate(y_idxs):
-                ax.scatter(Y[idxs, 0], Y[idxs, 1], c=colors[j])
-        else:
-            ax.scatter(Y[:, 0], Y[:, 1])
-        ax.set_title("perplexity=%s" % p)
-
-    return Y_list
-
-
-def plot_scores(score_arr, nrows=1, y_idxs=None, titles=None):
-    n_scores = score_arr.shape[1]
-    ncols = np.ceil(n_scores / nrows).astype(int)
-    fix, axes = plt.subplots(nrows, ncols, squeeze=False)
-
-    if y_idxs is None:
-        y_idxs = np.arange(len(score_arr))
-    if titles is None:
-        titles = np.range(n_scores).astype(int)
-
-    for idx in range(n_scores):
-        ax = axes.ravel()[idx]
-        for y_idx, yy in enumerate(y_idxs):
-            ax.hist(score_arr[yy, idx], bins=50, alpha=0.5, label=y_idx)
-        ax.set_title(titles[idx])
-        ax.legend()
 
 
 def plot_kde(
@@ -521,19 +323,3 @@ def filtmag_vs_mag(
         mag_cutoffs.append(mag_cutoff)
 
     return bins, densities, cdfs, mag_cutoffs
-
-
-if __name__ == "__main__":
-    # npz = np.load('patches/image_1.npz')
-    # image = npz['image']
-    # real_blobs = npz['real_blobs']
-    # plot_blobs(image=image, blobs=real_blobs)
-    import sys
-    import json
-    import geog
-    import shapely.geometry
-
-    if len(sys.argv) < 4:
-        print("python %s lat lon radius(in km)" % sys.argv[0])
-    else:
-        print("python %s lat lon radius(in km)" % sys.argv[0])

@@ -3,7 +3,7 @@ from pathlib import Path
 import toml
 import numpy as np
 
-import blobsar
+import blobsar.core as core
 from blobsar.logger import get_log, log_runtime
 
 logger = get_log()
@@ -55,7 +55,7 @@ def find_blob_pvalues(
     )
 
     logger.info("Finding the blobs within image")
-    image_blobs, _ = blobsar.find_blobs(
+    image_blobs, _ = core.find_blobs(
         image,
         verbose=1,
         **blob_params,
@@ -397,7 +397,7 @@ def run_sim(
         # return
         # for nimg, image in enumerate(sar_stack):
         # logger.info(f"Detecting on {nimg = } out of {num_days}")
-        blobs, _ = blobsar.find_blobs(
+        blobs, _ = core.find_blobs(
             cumulative_image,
             verbose=1,
             **blob_params,

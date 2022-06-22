@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import pandas as pd
 
-from blobsar import find_blobs
+from blobsar.core import find_blobs
 from . import skblob, plot
 from . import utils as blob_utils
 from .logger import log_runtime

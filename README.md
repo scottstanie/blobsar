@@ -7,8 +7,7 @@
 ## Usage
 
 ```python
-from troposim import turbulence
-noise = turbulence.simulate(shape=(500, 500))
+from blobsar.core import find_blobs
 
 ```
 

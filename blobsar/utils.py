@@ -2,16 +2,8 @@
 """
 import collections
 import itertools
-import apertools.latlon
 import numpy as np
-import skimage
 from scipy.ndimage import gaussian_filter
-
-# from scipy.spatial.qhull import ConvexHull
-# from shapely.geometry import Point, MultiPoint, Polygon, box
-import geog
-import shapely.geometry
-import geojson
 
 
 def get_center_value(img, patch_size=1, accum_func=np.mean):
@@ -69,7 +61,8 @@ def get_blob_stats(blobs, image, center_only=False, radius_pct=1.0, accum_func=n
     Args:
         blobs (ndarray): 2D, entries [row, col, radius, ...], from find_blobs
         image (ndarray): 2D image where blobs were found
-        center_only (bool): (default False) Only get the value of the center pixel of the blob
+        center_only (bool): (default False) Only get the value of the center pixel
+            of the blob
         radius_pct (float): (default 1.) Only use `radius_pct` of the middle of the blob
         accum_func (bool): (default np.max) Function to run on all pixels
             within blob to accumulate to one value
@@ -157,14 +150,14 @@ def patch_within_square(image, mask_shape=None, blob=None):
 
 
 def gaussian_kernel(shape, sigma=None, pdf=False):
-    """Create a Gaussian kernal with std. dev `sigma` to weight a patch """
+    """Create a Gaussian kernal with std. dev `sigma` to weight a patch"""
     ny, nx = shape
     if sigma is None:
         sigma = min(nx, ny) / 4
     y = (np.arange(ny) - ny // 2).reshape((-1, 1))
     x = (np.arange(nx) - nx // 2).reshape((1, -1))
-    C = 1 / (2 * np.pi * sigma ** 2) if pdf else 1
-    return C * np.exp(-(x ** 2 + y ** 2) / (2 * sigma ** 2))
+    C = 1 / (2 * np.pi * sigma**2) if pdf else 1
+    return C * np.exp(-(x**2 + y**2) / (2 * sigma**2))
 
 
 def crop_image_to_mask(image, mask, crop_val=None, sigma=0):
@@ -206,28 +199,6 @@ def crop_blob(image, blob, crop_val=None, sigma=0):
     return crop_image_to_mask(image, mask, crop_val=crop_val, sigma=sigma)
 
 
-def append_stats(blobs, image, stat_funcs=(np.var, np.ptp), center_only=False):
-    """Append columns based on the statistic functions in stats
-
-    Default: adds the variance and peak-to-peak within blob
-
-    Args:
-        center_only (bool, or array-list[bool]): pass to get_blob_stats
-            Can either do 1 true false for all stat_funcs, or an iterable
-            of matching size
-    """
-    new_blobs = blobs.copy()
-    if isinstance(center_only, collections.Iterable):
-        center_iter = center_only
-    else:
-        center_iter = itertools.repeat(center_only)
-
-    for func, center in zip(stat_funcs, center_iter):
-        blob_stat = get_blob_stats(new_blobs, image, accum_func=func)
-        new_blobs = np.column_stack((new_blobs, blob_stat))
-    return new_blobs
-
-
 def _sort_by_col(arr, col, reverse=False):
     sorted_arr = arr[arr[:, col].argsort()]
     return sorted_arr[::-1] if reverse else sorted_arr
@@ -265,17 +236,6 @@ def sort_blobs_by_val(blobs, image, radius_pct=1.0, positive=True):
     return _sort_by_col(blobs_with_mags, -1, reverse=reverse)
 
 
-def eig_ratio(patch, blob=None):
-    from skimage.feature.corner import _symmetric_image, hessian_matrix
-
-    sigma = sigma_from_blob(blob=blob, patch=patch)
-
-    hessian_mat_array = _symmetric_image(hessian_matrix(patch, sigma))
-    det = np.linalg.det(hessian_mat_array)
-    trace = np.trace(hessian_mat_array, axis1=2, axis2=3)
-    return trace ** 2 / det
-
-
 def find_sigma_idxs(blobs, sigma_list):
     """Finds which sigma each blob uses by its index in sigma_list
 
@@ -285,32 +245,13 @@ def find_sigma_idxs(blobs, sigma_list):
     return np.clip(idxs, 0, len(sigma_list) - 1)
 
 
-def blobs_to_latlon(blobs, rsc_data=None, filename=None, radius_resolution=1):
+def blobs_to_latlon(blobs, filename=None, radius_resolution=1):
     """Converts (y, x, sigma, ...) format to (lat, lon, sigma_latlon, ...)
 
     Uses the dem x_step/y_step data, or data from GDAL-readable `filename`,
     to rescale blobs so that appear on an image using lat/lon
     as the `extent` argument of imshow.
     """
-    if filename is not None:
-        return _blobs_to_latlon_rio(blobs, filename, radius_resolution)
-    elif rsc_data is not None:
-        return _blobs_to_latlon_rsc(blobs, rsc_data, radius_resolution)
-    else:
-        raise ValueError("Must provide either filename or rsc_data")
-
-
-def save_blobs_as_geojson(
-    outfile, blobs=None, rsc_data=None, rio_filename=None, blobs_ll=None, **kwargs
-):
-    if blobs_ll is None:
-        blobs_ll = blobs_to_latlon(blobs, rsc_data=rsc_data, filename=rio_filename)
-
-    with open(outfile, "w") as f:
-        f.write(geojson.dumps(blob_to_geojson(blobs_ll, **kwargs)))
-
-
-def _blobs_to_latlon_rio(blobs, filename, radius_resolution):
     import rioxarray
     import rasterio as rio
 
@@ -333,39 +274,29 @@ def _blobs_to_latlon_rio(blobs, filename, radius_resolution):
     return out_blobs
 
 
-def _blobs_to_latlon_rsc(blobs, rsc_data, radius_resolution):
-    blobs_latlon = []
-    for blob in blobs:
-        row, col, r = blob[:3]
-        if rsc_data:
-            lat, lon = apertools.latlon.rowcol_to_latlon(row, col, rsc_data)
-            new_radius = r * rsc_data["x_step"] / radius_resolution
-            blobs_latlon.append((lat, lon, new_radius) + tuple(blob[3:]))
+def save_blobs_as_geojson(
+    outfile, blobs=None, rsc_data=None, rio_filename=None, blobs_ll=None, **kwargs
+):
+    import geojson
 
-    return np.array(blobs_latlon)
+    if blobs_ll is None:
+        blobs_ll = blobs_to_latlon(blobs, rsc_data=rsc_data, filename=rio_filename)
 
-
-def blobs_to_rowcol(blobs, blob_info):
-    """Converts (lat, lon, sigma, val) format to (row, col, sigma_latlon, val)
-
-    Inverse of blobs_to_latlon function
-    """
-    blobs_rowcol = []
-    for blob in blobs:
-        lat, lon, r, val = blob
-        lat, lon = apertools.latlon.latlon_to_rowcol(lat, lon, blob_info)
-        old_radius = r / blob_info["x_step"]
-        blobs_rowcol.append((lat, lon, old_radius, val))
-
-    return np.array(blobs_rowcol)
+    with open(outfile, "w") as f:
+        f.write(geojson.dumps(blob_to_geojson(blobs_ll, **kwargs)))
 
 
 def blob_to_geojson(blobs_ll, circle_points=20, extra_columns=["amplitude"]):
+    import geog
+    import shapely.geometry
+    import geojson
+
     blob_polygons = []
     # TODO write in amp attr
     for lat, lon, rad_deg in blobs_ll[:, :3]:
         p = shapely.geometry.Point([lon, lat])
-        d = apertools.latlon.latlon_to_dist([lat, lon], [lat, lon + rad_deg])  # m
+        # TODO: Prob a better way to make a circle around the lat/lon coordinates
+        d = latlon_to_dist([lat, lon], [lat, lon + rad_deg])  # m
         angles = np.linspace(0, 360, circle_points)
         polygon = geog.propagate(p, angles, d)
         blob_polygons.append(
@@ -379,101 +310,29 @@ def blob_to_geojson(blobs_ll, circle_points=20, extra_columns=["amplitude"]):
     return geojson.FeatureCollection(gj_list)
 
 
-def img_as_uint8(img, vmin=None, vmax=None):
-    # Handle invalids with masked array, set it to 0
-    out = np.ma.masked_invalid(img).filled(0)
-    if vmin is not None or vmax is not None:
-        out = np.clip(out, vmin, vmax)
-    return skimage.img_as_ubyte(skimage.exposure.rescale_intensity(out))
+def latlon_to_dist(lat_lon_start, lat_lon_end):
+    """Find the distance between two lat/lon points on Earth [in meters]
 
+    lats and lons are in degrees, WGS84 ellipsoid is used
+    wrapper around pyproj.Geod for older compatibility
 
-def cv_bbox_to_extent(bbox):
-    """convert opencv (top x, top y, w, h) to (left, right, bot, top)
+    Args:
+        lat_lon_start (tuple[int, int]): (lat, lon) in degrees of start
+        lat_lon_end (tuple[int, int]): (lat, lon) in degrees of end
 
-    For use in latlon.intersection_over_union"""
-    x, y, w, h = bbox
-    # Note: these are row, col pixels, but we still do y + h so that
-    # top is a larger number
-    return (x, x + w, y, y + h)
+    Returns:
+        float: distance between two points in meters
 
+    Examples:
+        >>> round(latlon_to_dist((38.8, -77.0), (38.9, -77.1)))
+        14092
+    """
+    from pyproj import Geod
 
-def bbox_to_coords(bbox, cv_format=False):
-    if cv_format:
-        bbox = cv_bbox_to_extent(bbox)
-    left, right, bot, top = bbox
-    return ((left, bot), (right, bot), (right, top), (left, top), (left, bot))
-
-
-def regions_to_shapes(regions):
-    return [shapely.geometry.Polygon(r) for r in regions]
-
-
-def _box_is_bad(bbox, min_pix=3, max_ratio=5):
-    """Returns true if (x, y, w, h) box is too small or w/h is too oblong"""
-    x, y, w, h = bbox
-    return w < min_pix or h < min_pix or w / h > max_ratio or h / w > max_ratio
-
-
-# # TODO: GET THE KM TO PIXEL CONVERSION
-# # TODO: maybe make a gauss pyramid, then only do small MSERs
-# # TODO: does this work on negative regions at same time as pos? try big path85
-# def find_mser_regions(img, min_area=50):
-#     import cv2 as cv
-#     mser = cv.MSER_create()
-#     # TODO: get minarea, maxarea from some km set, convert to pixel
-#     mser.setMinArea(220)
-#     # mser.setMaxArea(220)
-#     regions, bboxes = mser.detectRegions(img)
-#     regions, bboxes = prune_regions(regions, bboxes, overlap=0.5)
-#     return regions, bboxes
-
-
-#
-# def combine_hulls(points1, points2):
-# h = ConvexHull(np.vstack((points1, points2)))
-# Or maybe
-# h.add_points(points2)
-# h.close()
-# h = ConvexHull(points1)
-# h.add_points(points2)
-# return h
-
-
-def prune_regions(regions, bboxes, overlap_thresh=0.5):
-    """Takes in mser regions and bboxs, merges nested regions into the largest"""
-    # tup = (box, region)
-    # bb = [cv_bbox_to_extent(b) for b in bboxes]
-    sorted_bbox_regions = sorted(
-        zip(bboxes, regions),
-        key=lambda tup: apertools.latlon.box_area(cv_bbox_to_extent(tup[0])),
-        reverse=True,
-    )
-    # Break apart again
-    sorted_bboxes, sorted_regions = zip(*sorted_bbox_regions)
-
-    # TODO: i'm just eliminating now (like nonmax suppression)... do i
-    # want to merge by combining hulls?
-    eliminated_idxs = set()
-    # Start with current largest box, check all smaller for overlaps to eliminate
-    for idx, big_box in enumerate(sorted_bboxes):
-        if idx in eliminated_idxs:
-            continue
-        bbig = cv_bbox_to_extent(big_box)
-        for jdx, sbox in enumerate(sorted_bboxes[idx + 1 :], start=idx + 1):
-            if jdx in eliminated_idxs:
-                continue
-            bsmall = cv_bbox_to_extent(sbox)
-            if (
-                apertools.latlon.intersect_area(bbig, bsmall)
-                / apertools.latlon.box_area(bsmall)
-            ) > overlap_thresh:
-                eliminated_idxs.add(jdx)
-
-    # Now get the non-eliminated indices
-    all_idx = range(len(sorted_bboxes))
-    remaining = list(set(all_idx) - set(eliminated_idxs))
-    # Converts to np.array to use fancy indexing
-    return list(np.array(sorted_regions)[remaining]), np.array(sorted_bboxes)[remaining]
+    WGS84 = Geod(ellps="WGS84")
+    lat1, lon1 = lat_lon_start
+    lat2, lon2 = lat_lon_end
+    return WGS84.line_length((lon1, lon2), (lat1, lat2))
 
 
 def gaussian_filter_nan(image, sigma, mode="constant", **kwargs):
