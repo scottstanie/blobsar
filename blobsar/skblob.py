@@ -1,25 +1,15 @@
 """Functions transferred/modified from skimage.feature"""
 from __future__ import division
 
+from joblib import Parallel, delayed
 import numpy as np
-from scipy.ndimage import (
-    gaussian_laplace,
-    maximum_filter,
-    gaussian_filter,
-    generic_laplace,
-    fourier_gaussian,
-)
+from scipy.ndimage import maximum_filter
 from scipy.fft import fft2, ifft2, fftshift
 
 import math
 from math import sqrt, log
 from scipy import spatial
 from . import utils as blob_utils
-
-
-# This basic blob detection algorithm is based on:
-# http://www.cs.utah.edu/~jfishbau/advimproc/project1/ (04.04.2013)
-# Theory behind: http://en.wikipedia.org/wiki/Blob_detection (04.04.2013)
 
 
 def blob_log(
@@ -435,8 +425,6 @@ def prune_overlap_blobs(blobs_array, overlap, sigma_bins=1):
     # Note: skimage way overwrote the original blobs array's sigma value: blob1[-1] = 0
     # return np.array([b for b in blobs_array if b[-1] > 0])
 
-
-from joblib import Parallel, delayed
 
 
 def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True, smooth=True):

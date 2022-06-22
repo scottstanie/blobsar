@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from apertools import plotting
 from . import utils as blob_utils
 from . import pvalue
 from blobsar.logger import get_log
@@ -16,8 +15,6 @@ def plot_blobs(
     ax=None,
     color="blue",
     blob_cmap=None,
-    plot_img=False,
-    extent=None,
     bbox=None,
     alpha=0.8,
     **kwargs,
@@ -32,12 +29,12 @@ def plot_blobs(
     """
     if fig and not ax:
         ax = fig.gca()
-    if plot_img or not ax:
-        fig, ax, ax_img = plotting.plot_image(
-            image, fig=fig, ax=ax, extent=extent, bbox=bbox, **kwargs
-        )
-        # ax_img = ax.imshow(image)
-        # fig.colorbar(ax_img)
+    if not ax:
+        if bbox is not None:
+            extent = [bbox[0], bbox[2], bbox[1], bbox[3]]
+        fig, ax = plt.subplots()
+        ax_img = ax.imshow(image, extent=extent)
+        fig.colorbar(ax_img)
 
     if not ax:
         ax = fig.gca()

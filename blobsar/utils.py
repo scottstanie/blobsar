@@ -1,7 +1,5 @@
 """utils.py: Functions for finding blobs in deformation maps
 """
-import collections
-import itertools
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
