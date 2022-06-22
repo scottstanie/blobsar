@@ -17,4 +17,7 @@
 #
 numpy>=1.21
 scipy
+toml
 joblib
+rasterio
+matplotlib

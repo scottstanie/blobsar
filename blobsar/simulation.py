@@ -88,9 +88,6 @@ def run_sim(
             cumulative_image /= divide_cumulative_by
             print(f"{np.ptp(cumulative_image) = }")
 
-        # return
-        # for nimg, image in enumerate(sar_stack):
-        # logger.info(f"Detecting on {nimg = } out of {num_days}")
         blobs, _ = core.find_blobs(
             cumulative_image,
             verbose=1,

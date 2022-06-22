@@ -250,11 +250,14 @@ def blobs_to_latlon(blobs, filename=None, radius_resolution=1):
     to rescale blobs so that appear on an image using lat/lon
     as the `extent` argument of imshow.
     """
-    import rioxarray
+    # TODO: do this without rioxarray, just rio
+    # import rioxarray
     import rasterio as rio
 
-    with rioxarray.open_rasterio(filename) as ds:
-        trans = ds.rio.transform()
+    # with rioxarray.open_rasterio(filename) as ds:
+    with rio.open(filename) as src:
+        # trans = ds.rio.transform()
+        trans = src.meta["transform"]
         x_size = trans[0]
         # y_size = -trans[4]
         lon_lat_arr = np.array(rio.transform.xy(trans, blobs[:, 0], blobs[:, 1])).T
