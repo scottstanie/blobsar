@@ -1,6 +1,7 @@
-"""Functions transferred/modified from skimage.feature"""
-from __future__ import division
+"""Functions transferred/modified from skimage.feature
 
+Moved here to rapidly change as needed to make alterations work.
+"""
 from joblib import Parallel, delayed
 import numpy as np
 from scipy.ndimage import maximum_filter
@@ -125,8 +126,6 @@ def blob_log(
         image_cube, threshold_abs=threshold, min_distance=1, exclude_border=False
     )
 
-    # TODO: something here is hanging if a nan happens... causing all nans
-
     # Catch no peaks
     if local_maxima.size == 0:
         return np.empty((0, 3))
@@ -134,7 +133,9 @@ def blob_log(
     lm = local_maxima.astype(np.float64)
     # Convert the last index to its corresponding scale value
     lm[:, -1] = sigma_list[local_maxima[:, -1]]
-    filter_responses = image_cube[local_maxima[:, 0], local_maxima[:, 1], local_maxima[:, 2]]
+    filter_responses = image_cube[
+        local_maxima[:, 0], local_maxima[:, 1], local_maxima[:, 2]
+    ]
     lm = np.column_stack((lm, filter_responses))
 
     # Multiply each sigma by sqrt(2) to convert sigma to a circle radius
@@ -153,8 +154,6 @@ def blob_log(
 
     # Next remove blobs that look like edges
     if prune_edges:
-        # smoothed_image = gaussian_filter(image, sigma=3, mode="constant")
-        # lm = prune_edge_extrema(smoothed_image, lm, positive=positive, smooth=True)
         lm = prune_edge_extrema(image, lm, positive=positive, smooth=True)
     if verbose > 0:
         print("lm post prune_edge_extrema:")
@@ -235,9 +234,9 @@ def log_kernel(shape, sigma):
     y = (np.arange(ny) - ny // 2).reshape((-1, 1))
     x = (np.arange(nx) - nx // 2).reshape((1, -1))
     # Analytical formula for scale-normalized LoG
-    xy2 = x ** 2 + y ** 2
-    C = (xy2 - 2 * sigma ** 2) / (2 * np.pi * sigma ** 4)  # Constant out in front
-    return C * np.exp(-(xy2 / (2 * sigma ** 2)))
+    xy2 = x**2 + y**2
+    C = (xy2 - 2 * sigma**2) / (2 * np.pi * sigma**4)  # Constant out in front
+    return C * np.exp(-(xy2 / (2 * sigma**2)))
 
 
 def _compute_disk_overlap(d, r1, r2):
@@ -254,11 +253,11 @@ def _compute_disk_overlap(d, r1, r2):
         area (float): area of the overlap between the two disks.
     """
 
-    ratio1 = (d ** 2 + r1 ** 2 - r2 ** 2) / (2 * d * r1)
+    ratio1 = (d**2 + r1**2 - r2**2) / (2 * d * r1)
     ratio1 = np.clip(ratio1, -1, 1)
     acos1 = math.acos(ratio1)
 
-    ratio2 = (d ** 2 + r2 ** 2 - r1 ** 2) / (2 * d * r2)
+    ratio2 = (d**2 + r2**2 - r1**2) / (2 * d * r2)
     ratio2 = np.clip(ratio2, -1, 1)
     acos2 = math.acos(ratio2)
 
@@ -266,12 +265,12 @@ def _compute_disk_overlap(d, r1, r2):
     b = d - r2 + r1
     c = d + r2 - r1
     d = d + r2 + r1
-    area = r1 ** 2 * acos1 + r2 ** 2 * acos2 - 0.5 * sqrt(abs(a * b * c * d))
+    area = r1**2 * acos1 + r2**2 * acos2 - 0.5 * sqrt(abs(a * b * c * d))
     return area
 
 
 def _disk_area(r):
-    return math.pi * r ** 2
+    return math.pi * r**2
 
 
 def _blob_dist(blob1, blob2):
@@ -426,7 +425,6 @@ def prune_overlap_blobs(blobs_array, overlap, sigma_bins=1):
     # return np.array([b for b in blobs_array if b[-1] > 0])
 
 
-
 def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True, smooth=True):
     """Finds filters out blobs whose extreme point is far from center
 
@@ -451,28 +449,11 @@ def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True, smooth=T
         `max_dist_ratio` of the center
 
     """
-    # TODO: check how it can give > 1 values
-    # Removing [  0., 131., 29.47353778, 1.70626337] for dist_to_extreme=1.199
-
-    # if smooth:
-    #     sigma = 2
-    #     # Use 1/4 of the radius (ad hoc value) or 2 (to not wash out tiny blobs)
-    #     # radius = b[2]
-    #     # sigma = np.clip(radius / 4, 2, None)
-    #     # sigma = radius / sqrt(2)
-    # else:
-    #     sigma = 0
-
-    # out_blobs = []
-    # for b in blobs:
-    #     dist_to_extreme = get_dist_to_extreme(image, b, positive=positive, sigma=sigma)
-    #     if dist_to_extreme < max_dist_ratio:
-    #         out_blobs.append(b)
-    #     # else:
-    #     # print("Removing %s for dist_to_extreme=%s" % (str(b), dist_to_extreme))
     print(f"Finding dist to extreme on {len(blobs)} candidate blobs")
     distances = Parallel(n_jobs=-1)(
-        delayed(get_dist_to_extreme)(image, b, positive=positive, smooth=smooth)  # sigma=sigma)
+        delayed(get_dist_to_extreme)(
+            image, b, positive=positive, smooth=smooth
+        )  # sigma=sigma)
         for b in blobs
     )
     # distances = [get_dist_to_extreme(image, b, positive=positive, smooth=smooth) for b in blobs]
@@ -530,7 +511,7 @@ def get_dist_to_extreme(image=None, blob=None, positive=True, smooth=True, patch
     min_dist = np.min(dist_arr / blob[2])
     # r, c= blob[:2]
     # if 45 < r < 75 and 105 < c < 160:
-        # breakpoint()
+    # breakpoint()
     return min_dist
 
 
@@ -735,82 +716,3 @@ def _get_high_intensity_peaks(image, mask, num_peaks):
         coord = np.column_stack(coord)
     # Higest peak first
     return coord[::-1]
-
-
-def shape_index(image, sigma=1, mode="nearest", cval=0, eps=1e-16):
-    """Compute the shape index.
-
-    The shape index, as defined by Koenderink & van Doorn [1]_, is a
-    single valued measure of local curvature, assuming the image as a 3D plane
-    with intensities representing heights.
-
-    It is derived from the eigen values of the Hessian, and its
-    value ranges from -1 to 1 (and is undefined (=NaN) in *flat* regions),
-    with following ranges representing following shapes:
-
-    .. table:: Ranges of the shape index and corresponding shapes.
-
-      Interval (s in ...)  Shape
-      ===================  =============
-      [  -1, -7/8)         Spherical cup
-      [-7/8, -5/8)         Through
-      [-5/8, -3/8)         Rut
-      [-3/8, -1/8)         Saddle rut
-      [-1/8, +1/8)         Saddle
-      [+1/8, +3/8)         Saddle ridge
-      [+3/8, +5/8)         Ridge
-      [+5/8, +7/8)         Dome
-      [+7/8,   +1]         Spherical cap
-      ===================  =============
-
-    Parameters
-    ----------
-    image : ndarray
-        Input image.
-    sigma : float, optional
-        Standard deviation used for the Gaussian kernel, which is used for
-        smoothing the input data before Hessian eigen value calculation.
-    mode : {'constant', 'reflect', 'wrap', 'nearest', 'mirror'}, optional
-        How to handle values outside the image borders
-    cval : float, optional
-        Used in conjunction with mode 'constant', the value outside
-        the image boundaries.
-    eps : float, optional
-        Padding to the smaller hessian eigenvalue to avoid division by 0
-
-    Returns
-    -------
-    s : ndarray
-        Shape index
-
-    References
-    ----------
-    .. [1] Koenderink, J. J. & van Doorn, A. J.,
-           "Surface shape and curvature scales",
-           Image and Vision Computing, 1992, 10, 557-564.
-           DOI:10.1016/0262-8856(92)90076-F
-
-    Examples
-    --------
-    >>> square = np.zeros((5, 5))
-    >>> square[2, 2] = 4
-    >>> s = shape_index(square, sigma=0.1)
-    >>> s
-    array([[ nan,  nan, -0.5,  nan,  nan],
-           [ nan, -0. ,  nan, -0. ,  nan],
-           [-0.5,  nan, -1. ,  nan, -0.5],
-           [ nan, -0. ,  nan, -0. ,  nan],
-           [ nan,  nan, -0.5,  nan,  nan]])
-    """
-    from skimage.feature import hessian_matrix, hessian_matrix_eigvals
-
-    H = hessian_matrix(image, sigma=sigma, mode=mode, cval=cval, order="rc")
-    l1, l2 = hessian_matrix_eigvals(H)
-    # l2_safe = l2 + eps
-    num = l2 + l1
-    denom = l2 - l1
-    arg = num / denom
-
-    out = (2.0 / np.pi) * np.arctan(arg)
-    # import ipdb; ipdb.set_trace()
-    return out
