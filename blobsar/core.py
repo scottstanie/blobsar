@@ -27,6 +27,7 @@ def find_blobs(
     log_scale=True,
     sigma_ratio=1.4,
     verbose=0,
+    outfile=None,
     **kwargs,
 ):
     """Find blob features within an image
@@ -59,6 +60,10 @@ def find_blobs(
         log_scale : bool, optional
             If set intermediate values of standard deviations are interpolated
             using a logarithmic scale. If not, linear
+        verbose (int):
+            verbosity level
+        outfile (str):
+            if not None, will write blob features to file as a csv
 
     Returns:
         blobs: ndarray: rows are blobs with values: [(r, c, radius, mag)], where
@@ -144,4 +149,16 @@ def find_blobs(
             desc = "positive" if mult == 1 else "negative"
             logger.info(f"Found {len(blobs_with_mags)} {desc} blobs")
 
+    if outfile is not None:
+        _write_csv(blobs, outfile)
+
     return blobs, sigma_list
+
+
+def _write_csv(blobs, outfile):
+    """Write blob features to csv file"""
+    from blobsar.constants import COLUMN_NAMES
+
+    header = ",".join(COLUMN_NAMES)
+    col_fmts = ["%d", "%d", "%.3f", "%.3f", "%.3f"]
+    np.savetxt(outfile, blobs, delimiter=",", fmt=col_fmts, header=header)

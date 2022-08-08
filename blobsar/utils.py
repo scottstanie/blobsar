@@ -250,11 +250,11 @@ def blobs_to_latlon(blobs, filename=None, radius_resolution=1):
     to rescale blobs so that appear on an image using lat/lon
     as the `extent` argument of imshow.
     """
-    # TODO: do this without rioxarray, just rio
-    # import rioxarray
-    import rasterio as rio
+    try:
+        import rasterio as rio
+    except ImportError:
+        raise ImportError("rasterio is required for conversion to lat/lon")
 
-    # with rioxarray.open_rasterio(filename) as ds:
     with rio.open(filename) as src:
         # trans = ds.rio.transform()
         trans = src.meta["transform"]
@@ -289,8 +289,8 @@ def save_blobs_as_geojson(
 
 def blob_to_geojson(blobs_ll, circle_points=20, extra_columns=["amplitude"]):
     import geog
-    import shapely.geometry
     import geojson
+    import shapely.geometry
 
     blob_polygons = []
     # TODO write in amp attr

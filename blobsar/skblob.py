@@ -128,7 +128,7 @@ def blob_log(
 
     # Catch no peaks
     if local_maxima.size == 0:
-        return np.empty((0, 3))
+        return np.empty((0, 4))
     # Convert local_maxima to float64
     lm = local_maxima.astype(np.float64)
     # Convert the last index to its corresponding scale value

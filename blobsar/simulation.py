@@ -1,9 +1,9 @@
 import os
 from pathlib import Path
-import toml
-import numpy as np
 
-import troposim.igram_sim
+import numpy as np
+import toml
+import troposim.igrams
 
 import blobsar.core as core
 from blobsar.logger import get_log, log_runtime
@@ -62,7 +62,7 @@ def run_sim(
     for nsim in range(start_idx, start_idx + num_sims + 1):
         logger.info(f"running sim {nsim - start_idx + 1} out of {num_sims}")
 
-        igm = troposim.igram_sim.IgramMaker(
+        igm = troposim.igrams.IgramMaker(
             num_days=num_days,
             resolution=resolution,
             shape=shape,

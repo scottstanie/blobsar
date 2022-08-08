@@ -1,19 +1,15 @@
 import os
-import toml
+
 import numpy as np
+import toml
 from scipy.stats import gaussian_kde
 
-
 import blobsar.core as core
-from blobsar.simulation import load_all_blobs
+from blobsar.constants import AMP_COL, FILT_AMP_COL, SIG_COL
 from blobsar.logger import get_log, log_runtime
+from blobsar.simulation import load_all_blobs
 
 logger = get_log()
-
-# meaning of columns in blobs
-SIG_COL = 2
-FILT_AMP_COL = 3
-AMP_COL = 4
 
 
 @log_runtime
