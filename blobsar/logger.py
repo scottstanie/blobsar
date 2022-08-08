@@ -47,13 +47,6 @@ def format_log(logger, debug=False, verbose=False):
 
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
-    logging.SUCCESS = 25  # between WARNING and INFO
-    logging.addLevelName(logging.SUCCESS, "SUCCESS")
-    setattr(
-        logger,
-        "success",
-        lambda message, *args: logger._log(logging.SUCCESS, message, args),
-    )
 
     if not logger.handlers:
         logger.addHandler(handler)
@@ -90,7 +83,6 @@ def log_runtime(f):
 
     This prints out to stderr the following in addition to the answer:
     [05/26 10:05:51] [INFO log.py] Total elapsed time for test_func (minutes): 0.00
-
     """
 
     def wrapper(*args, **kwargs):

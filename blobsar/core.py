@@ -6,10 +6,8 @@ from . import utils as blob_utils
 from .logger import get_log
 
 logger = get_log()
-BLOB_KWARG_DEFAULTS = {"threshold": 1, "min_sigma": 3, "max_sigma": 40}
 
 
-# TODO: clean up redundancies in this function
 def find_blobs(
     image,
     positive=True,
@@ -109,12 +107,20 @@ def find_blobs(
 
     image_cube = skblob.create_gl_cube(image, sigma_list=sigma_list)
 
+    # Search for either positive, negative, or both
+    # Used to multiple the image_cube values, and for sorting
+    multipliers = []
     if positive:
-        # logger.info('bpos')
-        blobs_pos = skblob.blob_log(
+        multipliers.append(1)
+    if negative:
+        multipliers.append(-1)
+
+    # Run the blob detection algorithm for each type
+    for mult in multipliers:
+        cur_blobs = skblob.blob_log(
             image=image,
             threshold=threshold,
-            image_cube=image_cube,
+            image_cube=mult * image_cube,
             sigma_list=sigma_list,
             sigma_bins=sigma_bins,
             prune_edges=prune_edges,
@@ -122,49 +128,20 @@ def find_blobs(
             positive=True,
             **kwargs,
         )
-        if int(verbose) > 1:
-            logger.info(blobs_pos)
-        # Append mags as a column and sort by it
-        # TODO: FIX vvv
-        if blobs_pos.size:
+        if cur_blobs.size:
             blobs_with_mags = blob_utils.sort_blobs_by_val(
-                blobs_pos, image, positive=True, radius_pct=radius_pct
-            )
-        else:
-            blobs_with_mags = np.empty((0, 5))
-        # logger.info(blobs_with_mags)
-        if mag_threshold is not None:
-            blobs_with_mags = blobs_with_mags[blobs_with_mags[:, -1] >= mag_threshold]
-        blobs = np.vstack((blobs, blobs_with_mags))
-        if int(verbose) > 0:
-            logger.info(f"Found {len(blobs_with_mags)} positive blobs")
-
-    if negative:
-        # logger.info('bneg')
-        blobs_neg = skblob.blob_log(
-            image=image,
-            threshold=threshold,
-            image_cube=-1 * image_cube,
-            sigma_list=sigma_list,
-            sigma_bins=sigma_bins,
-            prune_edges=prune_edges,
-            border_size=border_size,
-            positive=False,
-            **kwargs,
-        )
-        if blobs_neg.size:
-            blobs_with_mags = blob_utils.sort_blobs_by_val(
-                blobs_neg, image, positive=False, radius_pct=radius_pct
+                cur_blobs, image, positive=(mult == 1), radius_pct=radius_pct
             )
         else:
             blobs_with_mags = np.empty((0, 5))
         # logger.info(blobs_with_mags)
         if mag_threshold is not None:
             blobs_with_mags = blobs_with_mags[
-                -1 * blobs_with_mags[:, -1] >= mag_threshold
+                mult * blobs_with_mags[:, -1] >= mag_threshold
             ]
         blobs = np.vstack((blobs, blobs_with_mags))
         if int(verbose) > 0:
-            logger.info(f"Found {len(blobs_with_mags)} negative blobs")
+            desc = "positive" if mult == 1 else "negative"
+            logger.info(f"Found {len(blobs_with_mags)} {desc} blobs")
 
     return blobs, sigma_list
