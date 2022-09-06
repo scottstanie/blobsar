@@ -401,28 +401,30 @@ def prune_overlap_blobs(blobs_array, overlap, sigma_bins=1):
 
     # Note: changed from blobs_array[:, -1] to blobs_array[:, 2]- assuming we have
     # only 2d blobs, but it may be passed a blobs_array with amplitude (N, 4)
-    sigma = blobs_array[:, 2].max()
+    sigma_col = 2
+    sigma = blobs_array[:, sigma_col].max()
     max_distance = 2 * sigma * sqrt(blobs_array.shape[1] - 1)
-    tree = spatial.cKDTree(blobs_array[:, :-1])
+    tree = spatial.cKDTree(blobs_array[:, :sigma_col])
     pairs = np.array(list(tree.query_pairs(max_distance)))
 
     if len(pairs) == 0:
         return blobs_array
-    else:
-        # Use in
-        keep_idxs = np.ones((blobs_array.shape[0],)).astype(bool)
-        for (i, j) in pairs:
-            blob1, blob2 = blobs_array[i], blobs_array[j]
-            if blob_overlap(blob1, blob2) > overlap:
-                # kill the smaller blob if enough overlap
-                if blob1[2] > blob2[2]:
-                    keep_idxs[j] = False
-                else:
-                    keep_idxs[i] = False
 
-    return blobs_array[keep_idxs]
-    # Note: skimage way overwrote the original blobs array's sigma value: blob1[-1] = 0
-    # return np.array([b for b in blobs_array if b[-1] > 0])
+    # keep a copy so we can recover the sigma values after zeroing
+    blobs_orig = blobs_array.copy()
+    for (i, j) in pairs:
+        blob1, blob2 = blobs_array[i], blobs_array[j]
+        if blob_overlap(blob1, blob2) > overlap:
+            # kill the smaller blob if enough overlap
+            if blob1[sigma_col] > blob2[sigma_col]:
+                # Set the radius to zero so that future queries ignore it
+                blob2[sigma_col] = 0
+            else:
+                blob1[sigma_col] = 0
+
+    # Recover the sigma values
+    keep_idxs = blobs_array[:, sigma_col] > 0
+    return blobs_orig[keep_idxs]
 
 
 def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True, smooth=True):

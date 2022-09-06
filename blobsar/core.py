@@ -28,6 +28,7 @@ def find_blobs(
     sigma_ratio=1.4,
     verbose=0,
     outfile=None,
+    sigma_list=None,
     **kwargs,
 ):
     """Find blob features within an image
@@ -83,30 +84,23 @@ def find_blobs(
     """
     from . import skblob
 
-    def _dist_to_sigma(dist_km, resolution):
-        if resolution is None:
-            raise ValueError("Need `resolution` passed if using `min_km/max_km`")
-        radius_pix = dist_km * 1000 / resolution
-        sigma = radius_pix / np.sqrt(2)
-        logger.info(f"Converted {dist_km} to sigma={sigma} pixels")
-        return sigma
-
     # some skimage funcs fail for float32 when unnormalized [0,1]
     image = image.astype("float64")
-    if min_km is not None:
-        logger.info(f"Using {min_km = }")
-        min_sigma = _dist_to_sigma(min_km, resolution)
-    if max_km is not None:
-        logger.info(f"Using {max_km = }")
-        max_sigma = _dist_to_sigma(max_km, resolution)
+    if sigma_list is None:
+        if min_km is not None:
+            logger.info(f"Using {min_km = }")
+            min_sigma = _dist_to_sigma(min_km, resolution)
+        if max_km is not None:
+            logger.info(f"Using {max_km = }")
+            max_sigma = _dist_to_sigma(max_km, resolution)
 
-    sigma_list = skblob.create_sigma_list(
-        min_sigma=min_sigma,
-        max_sigma=max_sigma,
-        num_sigma=num_sigma,
-        log_scale=log_scale,
-        sigma_ratio=sigma_ratio,
-    )
+        sigma_list = skblob.create_sigma_list(
+            min_sigma=min_sigma,
+            max_sigma=max_sigma,
+            num_sigma=num_sigma,
+            log_scale=log_scale,
+            sigma_ratio=sigma_ratio,
+        )
 
     blobs = np.empty((0, 5))
 
@@ -131,6 +125,7 @@ def find_blobs(
             prune_edges=prune_edges,
             border_size=border_size,
             positive=True,
+            verbose=verbose,
             **kwargs,
         )
         if cur_blobs.size:
@@ -153,6 +148,15 @@ def find_blobs(
         _write_csv(blobs, outfile)
 
     return blobs, sigma_list
+
+
+def _dist_to_sigma(dist_km, resolution):
+    if resolution is None:
+        raise ValueError("Need `resolution` passed if using `min_km/max_km`")
+    radius_pix = dist_km * 1000 / resolution
+    sigma = radius_pix / np.sqrt(2)
+    logger.info(f"Converted {dist_km} to sigma={sigma} pixels")
+    return sigma
 
 
 def _write_csv(blobs, outfile):
