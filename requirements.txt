@@ -21,3 +21,4 @@ toml
 joblib
 # rasterio
 matplotlib
+rich

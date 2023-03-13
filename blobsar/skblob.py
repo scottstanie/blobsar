@@ -154,7 +154,9 @@ def blob_log(
 
     # Next remove blobs that look like edges
     if prune_edges:
-        lm = prune_edge_extrema(image, lm, positive=positive, smooth=True)
+        lm = prune_edge_extrema(
+            image, lm, positive=positive, smooth=True, verbose=verbose
+        )
     if verbose > 0:
         print("lm post prune_edge_extrema:")
         print(lm)
@@ -412,7 +414,7 @@ def prune_overlap_blobs(blobs_array, overlap, sigma_bins=1):
 
     # keep a copy so we can recover the sigma values after zeroing
     blobs_orig = blobs_array.copy()
-    for (i, j) in pairs:
+    for i, j in pairs:
         blob1, blob2 = blobs_array[i], blobs_array[j]
         if blob_overlap(blob1, blob2) > overlap:
             # kill the smaller blob if enough overlap
@@ -427,7 +429,9 @@ def prune_overlap_blobs(blobs_array, overlap, sigma_bins=1):
     return blobs_orig[keep_idxs]
 
 
-def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True, smooth=True):
+def prune_edge_extrema(
+    image, blobs, max_dist_ratio=0.7, positive=True, smooth=True, verbose=0
+):
     """Finds filters out blobs whose extreme point is far from center
 
     Searches for local maxima in case there is a nearby larger blob
@@ -445,13 +449,15 @@ def prune_edge_extrema(image, blobs, max_dist_ratio=0.7, positive=True, smooth=T
         smooth (bool): if True, smooth the blob patch with a gaussian filter
             to remove noise when finding extreme value.
             Filter size depends on size of blob radius
+        verbose (int): verbosity level
 
     Returns:
         out_blobs: rows from `blobs` which have a local max within
         `max_dist_ratio` of the center
 
     """
-    print(f"Finding dist to extreme on {len(blobs)} candidate blobs")
+    if verbose > 0:
+        print(f"Finding dist to extreme on {len(blobs)} candidate blobs")
     distances = Parallel(n_jobs=-1)(
         delayed(get_dist_to_extreme)(
             image, b, positive=positive, smooth=smooth
