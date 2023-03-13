@@ -7,7 +7,6 @@ from scipy.stats import gaussian_kde
 import blobsar.core as core
 from blobsar.constants import AMP_COL, FILT_AMP_COL, SIG_COL
 from blobsar.logger import get_log, log_runtime
-from blobsar.simulation import load_all_blobs
 
 logger = get_log()
 
@@ -92,6 +91,8 @@ def find_sim_pdf(
     display_kde=False,
     amp_col=AMP_COL,
 ):
+    from blobsar.simulation import load_all_blobs
+
     if cfg_fname is not None:
         cfg = toml.load(cfg_fname)
         resolution = cfg["troposim"]["resolution"]
