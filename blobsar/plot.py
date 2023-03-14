@@ -32,6 +32,8 @@ def plot_blobs(
     if not ax:
         if bbox is not None:
             extent = [bbox[0], bbox[2], bbox[1], bbox[3]]
+        else:
+            extent = None
         fig, ax = plt.subplots()
         ax_img = ax.imshow(image, extent=extent)
         fig.colorbar(ax_img)
@@ -94,6 +96,7 @@ def plot_cropped_blob(image=None, blob=None, patch=None, crop_val=None, sigma=0)
 def plot_surface(heights_grid, ax=None):
     """Makes default X, Y meshgrid to plot a surface of heights"""
     from mpl_toolkits.mplot3d import Axes3D
+
     rows, cols = heights_grid.shape
     xx = np.linspace(1, cols + 1, cols)
     yy = np.linspace(1, rows + 1, rows)
@@ -248,25 +251,29 @@ def plot_detect(Z, blob, extent, stacking_factor=[1], p0_factor=1, ax=None, titl
     if not ax:
         fig, ax = plt.subplots()
 
-    ax.axvline(np.abs(blob[-1]), linestyle="-", color="k")
+    ax.axvline(np.abs(blob[4]), linestyle="-", color="k")
     for sf in stacking_factor:
-        Avec, z_conditional, pvalue = pvalue.find_pvalue(
+        Avec, z_conditional, p = pvalue.find_pvalue(
             Z, extent=extent, blob=blob, stacking_factor=sf, p0_factor=p0_factor
         )
         ax.plot(Avec, z_conditional, label=f"{sf}", lw=3)
-        logger.info(f"For {sf} stacking factor, p = {pvalue:.3f}")
+        logger.info(f"For {sf} stacking factor, p = {p:.3f}")
     ax.set_xlabel(r"$A$ [cm]")
     ax.set_ylabel(r"$pdf$")
     if title is None:
-        ax.set_title(f"p = {pvalue:.3f}")
+        ax.set_title(f"p = {p:.3f}")
     ax.legend()
     plt.tight_layout()
 
-    return pvalue
+    return p
 
 
 def filtmag_vs_mag(
-    filt_threshs=np.linspace(0.1, 0.2, 5)[::-1], nbins=100, pval_thresh=0.05, r0_idx=10, plot=True,
+    filt_threshs=np.linspace(0.1, 0.2, 5)[::-1],
+    nbins=100,
+    pval_thresh=0.05,
+    r0_idx=10,
+    plot=True,
 ):
     import scipy.stats as stats
     import pandas as pd
@@ -284,7 +291,6 @@ def filtmag_vs_mag(
 
     densities = []
     for fthresh in filt_threshs:
-
         data = dfabs[(dfabs.r == r0) & (dfabs.filt > fthresh)].mag
         if data.size <= 1:
             density = None

@@ -39,6 +39,9 @@ class Simulator:
     num_days: Optional[int] = None
     # shape of the simulated image (if different from the shape of the PSD stack).
     shape: Optional[tuple] = None
+    # If the PSD stack was made from interferograms instead of estimates of the
+    # SAR troposphere, then this should be set to True.
+    from_interferograms: Optional[bool] = False
 
     blobsar_params: BlobsarParams = BlobsarParams()
 
@@ -60,10 +63,13 @@ class Simulator:
             self.blobsar_params.min_sigma = core._dist_to_sigma(
                 self.blobsar_params.min_km, self.resolution
             )
+            self.blobsar_params.min_km = None
+
         if self.blobsar_params.max_km is not None:
             self.blobsar_params.max_sigma = core._dist_to_sigma(
                 self.blobsar_params.max_km, self.resolution
             )
+            self.blobsar_params.max_km = None
 
         if self.out_dir is None:
             if self.config_file is not None:
@@ -134,26 +140,27 @@ class Simulator:
         total_blobs = 0
 
         for nsim in tqdm(range(start_idx, start_idx + self.num_sims + 1)):
-            igm = troposim.igrams.IgramMaker(
-                psd_stack=self.psd_stack,
-                num_days=self.num_days,
-                shape=self.shape,
-                randomize=True,
-                # Convert meters to cm
-                to_cm=True,
-            )
+            if self.from_interferograms:
+                # Directly simulate the interferograms
+                assert len(self.psd_stack) == 1
+                cumulative_image = self.psd_stack.simulate(
+                    num_days=self.num_days, shape=self.shape, seed=seed
+                )
+            else:
+                igm = troposim.igrams.IgramMaker(
+                    psd_stack=self.psd_stack,
+                    num_days=self.num_days,
+                    shape=self.shape,
+                    randomize=True,
+                    # Convert meters to cm
+                    to_cm=True,
+                )
+                igram_stack = igm.make_igram_stack(seed=seed)
+                # Perform stacking on the ifgs to get a cumulative deformation image
+                avg_velocity = igram_stack.sum(axis=0) / igm.temporal_baselines.sum()
+                time_span = (igm.sar_date_list[-1] - igm.sar_date_list[0]).days
+                cumulative_image = avg_velocity * time_span
 
-            igram_stack = igm.make_igram_stack(
-                seed=seed,
-                # p0_arr=tp.p0_arr,
-                # beta=tp.beta,
-                # beta_arr=tp.beta_arr,
-            )
-
-            # Perform stacking on the ifgs to get a cumulative deformation image
-            avg_velocity = igram_stack.sum(axis=0) / igm.temporal_baselines.sum()
-            time_span = (igm.sar_date_list[-1] - igm.sar_date_list[0]).days
-            cumulative_image = avg_velocity * time_span
             logger.debug(f"{np.ptp(cumulative_image) = }")
             if divide_cumulative_by is not None:
                 cumulative_image /= divide_cumulative_by
@@ -162,6 +169,7 @@ class Simulator:
             blobs, _ = core.find_blobs(
                 cumulative_image,
                 # verbose=1,
+                resolution=self.resolution,
                 **asdict(blob_params),
             )
             total_blobs += blobs.shape[0]
@@ -194,13 +202,14 @@ class Simulator:
     ):
         sim_blobs = self.load_all_blobs()
         logger.info("Creating KDE from simulation detected blobs")
+        # print(f"{amp_col =}")
         if kde_file is None:
-            if not hasattr(self, "kde_file"):
-                self.kde_file = self.out_dir / "kde_sim.npz"
+            # if not hasattr(self, "kde_file"):
+            kde_file = self.out_dir / f"kde_amp_col_{amp_col}_sim.npz"
 
-        if self.kde_file.exists():
-            logger.info(f"Loading saved KDE from {self.kde_file}")
-            with np.load(self.kde_file, allow_pickle=True) as f:
+        if kde_file.exists():
+            logger.info(f"Loading saved KDE from {kde_file}")
+            with np.load(kde_file, allow_pickle=True) as f:
                 Z = f["Z"]
                 extent = f["extent"]
         else:
@@ -212,14 +221,19 @@ class Simulator:
                 amp_col=amp_col,
                 vm_pct=vm_pct,
             )
-            logger.info(f"Saving KDE to {self.kde_file}")
-            np.savez(self.kde_file, Z=Z, extent=extent)
+            logger.info(f"Saving KDE to {kde_file}")
+            np.savez(kde_file, Z=Z, extent=extent)
 
         if display_kde:
             import blobsar.plot
 
             blobsar.plot.plot_kde(
-                Z, extent, resolution=self.resolution, vm_pct=vm_pct, **plot_kwargs
+                Z,
+                extent,
+                resolution=self.resolution,
+                vm_pct=vm_pct,
+                ampcol=amp_col,
+                **plot_kwargs,
             )
         return sim_blobs, Z, extent
 
@@ -232,6 +246,7 @@ class Simulator:
         num_sar_dates=None,
         stacking_factor=1.0,
         amp_col=AMP_COL,
+        verbose=0,
     ):
         _, Z, extent = self.get_pdf(
             kde_bw_method=kde_bw_method,
@@ -242,7 +257,8 @@ class Simulator:
         logger.info("Finding the blobs within image")
         image_blobs, _ = core.find_blobs(
             image,
-            verbose=1,
+            verbose=verbose,
+            resolution=self.resolution,
             **asdict(self.blobsar_params),
         )
         blobs_km = image_blobs.copy()
