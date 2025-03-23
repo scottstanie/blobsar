@@ -17,6 +17,7 @@ def plot_blobs(
     blob_cmap=None,
     bbox=None,
     alpha=0.8,
+    sort : bool = False,
     **kwargs,
 ):
     """Takes the blob results from find_blobs and overlays on image
@@ -46,13 +47,15 @@ def plot_blobs(
     if blob_cmap:
         blob_cm = cm.get_cmap(blob_cmap, len(blobs))
     patches = []
-    # Draw big blobs first to allow easier clicking on overlaps
-    sorted_blobs = sorted(blobs, key=lambda b: b[2], reverse=True)
+    if sort:
+        # Draw big blobs first to allow easier clicking on overlaps
+        sorted_blobs = sorted(blobs, key=lambda b: b[2], reverse=True)
+    else:
+        sorted_blobs = blobs
     for idx, blob in enumerate(sorted_blobs):
         if blob_cmap:
             color_pct = idx / len(blobs)
             color = blob_cm(color_pct)
-        # print(f"Plotting  {blob[1], blob[0]}")
         c = plt.Circle(
             (blob[1], blob[0]),
             blob[2],
@@ -125,18 +128,28 @@ def plot_kde(
     vm_pct=100,
     figsize=(5, 5),
     show_colorbar=True,
-    levels=15,
+    levels=6,
     ampcol=4,
     ylabel=None,
+    xlim=None,
+    ylim=None,
 ):
     if not ax:
-        fig, ax = plt.subplots(figsize=figsize)
+        try:
+            import proplot as pplt
+
+            fig, ax = pplt.subplots()
+        except ImportError:
+            fig, ax = plt.subplots(figsize=figsize)
     else:
         fig = ax.get_figure()
     # axim = ax.contourf(
     zplot = np.log(Z) if plot_log else Z
     if vmax is None:
         vmax = np.percentile(zplot, vm_pct)
+        # if isinstance(levels, int):
+        #     levels = np.linspace(0, vmax, levels)
+        #     print(f"{levels=}")
     # axim = ax.imshow(
     xx = np.linspace(extent[0], extent[1], Z.shape[1])
     yy = np.linspace(extent[2], extent[3], Z.shape[0])
@@ -155,6 +168,10 @@ def plot_kde(
         extend="max",
         # alpha=.2,
     )
+    if xlim is not None:
+        ax.set_xlim(xlim)
+    if ylim is not None:
+        ax.set_ylim(ylim)
     ax.set_aspect("auto")
     if not ylabel:
         ylabel = r"$\bar{d}$ [cm]" if ampcol == 4 else r"${g}$"
@@ -170,6 +187,7 @@ def plot_kde(
     if title:
         ax.set_title(title)
     ax.grid(grid)
+    return fig, ax
 
 
 # ab = np.vstack((all_blobs, all_blobs2, all_blobs3))

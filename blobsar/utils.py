@@ -243,7 +243,7 @@ def find_sigma_idxs(blobs, sigma_list):
     return np.clip(idxs, 0, len(sigma_list) - 1)
 
 
-def blobs_to_latlon(blobs, filename=None, radius_resolution=1):
+def blobs_to_latlon(blobs, filename=None, transform=None, radius_resolution=1):
     """Converts (y, x, sigma, ...) format to (lat, lon, sigma_latlon, ...)
 
     Uses the dem x_step/y_step data, or data from GDAL-readable `filename`,
@@ -255,12 +255,17 @@ def blobs_to_latlon(blobs, filename=None, radius_resolution=1):
     except ImportError:
         raise ImportError("rasterio is required for conversion to lat/lon")
 
-    with rio.open(filename) as src:
-        # trans = ds.rio.transform()
-        trans = src.meta["transform"]
-        x_size = trans[0]
-        # y_size = -trans[4]
-        lon_lat_arr = np.array(rio.transform.xy(trans, blobs[:, 0], blobs[:, 1])).T
+    if filename is not None:
+        with rio.open(filename) as src:
+            # trans = ds.rio.transform()
+            transform = src.meta["transform"]
+
+    if transform is None:
+        raise ValueError("Must provide either filename or transform")
+
+    x_size = transform[0]
+    # y_size = -transform[4]
+    lon_lat_arr = np.array(rio.transform.xy(transform, blobs[:, 0], blobs[:, 1])).T
 
     # print(f"{x_size = }, {y_size = }")
     # If the blob radius is km, need to divide by that, then mult by the degrees factor

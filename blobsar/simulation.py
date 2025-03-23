@@ -18,7 +18,7 @@ from blobsar.logger import get_log, log_runtime
 logger = get_log()
 
 
-@dataclass
+@dataclass(frozen=True)
 class BlobsarParams:
     threshold: float = 0.15
     mag_threshold: float = 0.5
@@ -174,22 +174,13 @@ class Simulator:
             )
             total_blobs += blobs.shape[0]
 
-            if nsim % 10 == 0:
+            if nsim % 10 == 1 and nsim > start_idx:
                 logger.info(
                     f"Found {total_blobs} blobs in {nsim - start_idx} simulations"
                 )
 
             outname = blob_template_file.replace("*", str(nsim))
-            # outname = f"blobs_sim_{nsim}.npy"
             np.save(self.out_dir / outname, blobs)
-
-        # all_blobs = load_all_blobs(out_dir)
-        # combined_path = out_dir / combined_blob_file
-        # logger.info(f"Saving combined blob file to {combined_path}")
-        # np.save(combined_path, all_blobs)
-
-    def load_all_blobs(self):
-        return load_all_blobs(self.out_dir)
 
     def get_pdf(
         self,
@@ -198,13 +189,12 @@ class Simulator:
         amp_col=AMP_COL,
         display_kde=False,
         vm_pct=99,
+        display_savename=None,
         **plot_kwargs,
     ):
-        sim_blobs = self.load_all_blobs()
+        sim_blobs = load_all_blobs(self.out_dir)
         logger.info("Creating KDE from simulation detected blobs")
-        # print(f"{amp_col =}")
         if kde_file is None:
-            # if not hasattr(self, "kde_file"):
             kde_file = self.out_dir / f"kde_amp_col_{amp_col}_sim.npz"
 
         if kde_file.exists():
@@ -227,7 +217,7 @@ class Simulator:
         if display_kde:
             import blobsar.plot
 
-            blobsar.plot.plot_kde(
+            fig, ax = blobsar.plot.plot_kde(
                 Z,
                 extent,
                 resolution=self.resolution,
@@ -235,6 +225,8 @@ class Simulator:
                 ampcol=amp_col,
                 **plot_kwargs,
             )
+            if display_savename:
+                fig.savefig(display_savename)
         return sim_blobs, Z, extent
 
     @log_runtime
@@ -350,3 +342,130 @@ def load_psd1d(psd_npz_file):
         psd1d_arr = f["psd1d_arr"]
 
     return p0_arr, beta_arr, beta_mean, freq_arr, psd1d_arr
+
+
+######################################
+from rich.console import Console
+from rich.table import Table
+
+
+def mark_true_matches(
+    df, blob_locations, distance_threshold: float | None = None, copy: bool = True
+):
+    """
+    Add a 'is_correct' column to the DataFrame indicating whether each detected blob
+    corresponds to an actual blob location.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame with detected blobs, containing at least 'row' and 'col' columns.
+    blob_locations : list of tuple
+        List of (row, col, sigma) tuples representing the true blob locations.
+    distance_threshold : float, optional
+        Maximum Euclidean distance between detected and actual blob centers
+        to consider it a match.
+        If None, uses half the closest blob sigma.
+    copy : bool
+        Operate on and return a copy of `df`.
+        Default is True.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with additional 'correct' and 'true_location' columns.
+    """
+    import numpy as np
+
+    # Make a copy to avoid modifying the original
+    result_df = df.copy() if copy else df
+
+    # Create new columns
+    result_df["is_correct"] = False
+
+    # For each detected blob
+    for idx, row in result_df.iterrows():
+        detected_row, detected_col = row["row"], row["col"]
+
+        min_distance = np.inf
+
+        # Find the closest true blob
+        for blob_row, blob_col, blob_sigma in blob_locations:
+            distance = np.sqrt(
+                (detected_row - blob_row) ** 2 + (detected_col - blob_col) ** 2
+            )
+            if distance < min_distance:
+                min_distance = distance
+
+        # If the closest blob is within the threshold, mark it as correct
+        threshold = (
+            distance_threshold if distance_threshold is not None else blob_sigma / 2
+        )
+        result_df.at[idx, "is_correct"] = min_distance <= threshold
+
+    return result_df
+
+
+def simulate_detections(
+    sim,
+    psd_stack,
+    num_days,
+    shape,
+    sigma_range=(8, 25),
+    simulated_amps=np.arange(0.5, 6, 0.5),
+    num_repeats=5,
+):
+    from troposim.deformation import synthetic
+    from scipy import stats
+
+    truths = []
+    dfs = []
+
+    for amp in simulated_amps:
+        for _ in range(num_repeats):
+            current_deformation, blob_locations = synthetic.multiple_gaussians(
+                amp_range=(amp, amp),
+                shape=shape,
+                num_blobs=20,
+                sigma_range=sigma_range,
+                avoid_overlap=True,
+                min_distance_factor=1,
+            )
+            truths.append(blob_locations)
+
+            igm = troposim.igrams.IgramMaker(
+                psd_stack=psd_stack,
+                num_days=num_days,
+                shape=shape,
+                to_cm=True,
+            )
+            igram_stack = igm.make_igram_stack()
+
+            # Perform stacking on the noise images, then add to the deformation
+            time_span = (igm.sar_date_list[-1] - igm.sar_date_list[0]).days
+
+            avg_velocity_noise = igram_stack.sum(axis=0) / igm.temporal_baselines.sum()
+            noise_image = avg_velocity_noise * time_span
+            print(
+                f"{np.ptp(noise_image)/2 = :.2f}, deformation {amp = }, SNR = {amp / np.max(noise_image):.2f}"
+            )
+            cumulative_image = noise_image + current_deformation
+
+            df = sim.find_blob_pvalues(cumulative_image)
+            df_filtamp = sim.find_blob_pvalues(cumulative_image, amp_col=3)
+
+            df_merged = pd.merge(
+                df,
+                df_filtamp,
+                on=("row", "col", "r", "filtamp", "amp"),
+                suffixes=("_amp", "_filtamp"),
+            )
+            df_clean = df_merged[
+                (df_merged.pvalue_amp < 0.2) & (df_merged.pvalue_filtamp < 0.2)
+            ]
+            df_clean.loc[:, "pvalue_harmonic_mean"] = stats.hmean(
+                df_clean[["pvalue_amp", "pvalue_filtamp"]], axis=1, weights=[0.8, 0.2]
+            )
+
+            dfs.append(mark_true_matches(df_clean, blob_locations))
+    return dfs, truths
